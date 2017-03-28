@@ -7,7 +7,9 @@ geometry: bmargin=1.5in,lmargin=.8in,rmargin=.8in,tmargin=.7in
 ---
 
 ```{r echo=FALSE}
-knitr::opts_chunk$set(warning = FALSE, message = FALSE, echo = FALSE)
+knitr::opts_chunk$set(warning = FALSE, 
+                      message = FALSE, 
+                      echo = FALSE)
 ```
 
 ```{r}
@@ -45,10 +47,9 @@ leafs <- c(
 ) %>% 
   enframe() %>% 
   set_names(c('id', 'cod_leaf')) %>% 
-  inner_join(assuntos, 'cod_leaf') %>% 
+  inner_join(assuntos, 'cod_leaf') %>%
   with(cod_leaf)
   
-
 ```
 
 O segundo passo do levantamento foi realizar uma pesquisa no site do TJSP para cada ano e cada assunto obtido. Isso foi feito de forma automatizada a partir da utilização de rotinas computacionais desenvolvidas pela ABJ, utilizando-se o software estatístico R. O código-fonte utilizado para essa pesquisa e os dados obtidos estão diponíveis [nesse link](https://github.com/abjur/educacaoTJSP).
@@ -57,12 +58,20 @@ O segundo passo do levantamento foi realizar uma pesquisa no site do TJSP para c
 s <- cjpg_session()
 tots <- tibble(leaf = leafs, ano = list(2009:2016)) %>% 
   unnest(ano) %>% 
-  group_by(leaf, ano) %>% 
+  arrange(leaf, ano) %>% 
+  group_by(leaf, ano) %>%
   do(ntot = {
     parms <- cjpg_parms(s, assuntos = .$leaf,
                         data_inicial = sprintf('%d-01-01', .$ano),
                         data_final = sprintf('%d-12-31', .$ano))
-    cjpg_npags(s, parms)
+    npags <- cjpg_npags(s, parms)
+    if (!is.na(npags)) {
+      cjpg(s, parms, 
+         path = sprintf('processos/%s_%s', .$ano, .$leaf), 
+         max_pag = Inf)
+    } else {
+      tibble::tibble(result = '0 resultados') 
+    }
   }) %>% 
   ungroup() %>% 
   unnest(ntot)
@@ -72,6 +81,21 @@ tots_tidy <- tots %>%
   replace_na(list(ntot = 0.0))
 
 write_rds(tots_tidy, 'tots_tidy.rds')
+
+# n_arqs <- 'processos' %>% 
+#   dir(full.names = TRUE) %>% 
+#   tibble::enframe() %>% 
+#   select(pasta = value) %>% 
+#   mutate(p2 = basename(pasta)) %>% 
+#   separate(p2, c('ano', 'leaf')) %>% 
+#   mutate(ano = as.integer(ano)) %>% 
+#   mutate(n_arq = map_int(pasta, ~length(dir(.x))))
+# n_tidy <- read_rds('tots_tidy.rds') %>% 
+#   select(leaf, ano, ntot)
+# n_arqs %>% 
+#   inner_join(n_tidy, c('leaf', 'ano')) %>% 
+#   filter(ntot != n_arq)
+
 ```
 
 # Resultados
@@ -128,3 +152,94 @@ Para avaliar o efeito da medida tomada em 2012/2013 no volume de processos, é n
 Outra investigação necessária envolve o fenômeno da classificação genérica de assuntos. Infelizmente, muitos processos são classificados com assuntos das pastas ao invés das informações mais específicas sobre o caso. Assim, pode ser que existam mais ações no judiciário do que os casos identificados no presente levantamento. A ABJ já utilizou métodos estatísticos no passado que buscam resolver parcialmente esse problema.
 
 O próximo passo para essa pesquisa consiste em acessar os textos das sentenças e/ou petições iniciais/liminares de vários processos e desenvolver um robô capaz de classificar os processos em categorias mais informativas que as TPUs. Essa classificação pode ser feita de forma supervisionada (através da pré-classificação de alguns textos em categorias adequadas) ou não supervisionada (agrupamento de textos em grupos que serão posteriormente interpretados).
+
+-------------------------------------------------------------------------------
+
+## Continuação
+
+Análise dos textos
+
+```{r eval=F}
+s <- cjpg_session()
+tots <- tibble(leaf = leafs, ano = list(2009:2016)) %>% 
+  unnest(ano) %>% 
+  arrange(leaf, ano) %>% 
+  group_by(leaf, ano) %>%
+  do(ntot = {
+    parms <- cjpg_parms(s, assuntos = .$leaf,
+                        data_inicial = sprintf('%d-01-01', .$ano),
+                        data_final = sprintf('%d-12-31', .$ano))
+    npags <- cjpg_npags(s, parms)
+    if (!is.na(npags)) {
+      cjpg(s, parms, 
+         path = sprintf('processos/%s_%s', .$ano, .$leaf), 
+         max_pag = Inf)
+    } else {
+      tibble::tibble(result = '0 resultados') 
+    }
+  }) %>% 
+  ungroup() %>% 
+  unnest(ntot)
+```
+
+```{r}
+arqs <- dir('processos', full.names = TRUE, recursive = TRUE)
+d_tjsp <- parse_cjpg(arqs)
+saveRDS(d_tjsp, 'd_tjsp_educ.rds')
+
+View(d_tjsp)
+
+d_tidy <- d_tjsp %>% 
+  filter(!is.na(txt), !is.na(classe), !is.na(assunto)) %>% 
+  select(n_processo, classe, assunto,
+         comarca, dt_disp = data_de_disponibilizacao,
+         foro, magistrado, vara, sentenca = txt) %>% 
+  arrange(desc(lubridate::dmy(dt_disp))) %>% 
+  distinct(n_processo, .keep_all = TRUE)
+
+set.seed(20170328)
+d_tidy %>% 
+  sample_n(200) %>% 
+  openxlsx::write.xlsx('amostra.xlsx')
+
+r_tags <- c('creche|vaga', 'escola', 
+            'professor', 'divida|debito',
+            'acordo|homolog|concili', 'seguranca')
+pegar_tags <- function(txt) {
+  map_df(r_tags, ~tibble::tibble(tag = .x, n = sum(str_detect(txt, .x))))
+}
+
+res <- d_tidy %>% 
+  mutate(sentenca = tolower(abjutils::rm_accent(sentenca))) %>% 
+  group_by(assunto) %>% 
+  do(pegar_tags(.$sentenca)) %>% 
+  ungroup() %>% 
+  spread(tag, n)
+
+tab <- res %>% 
+  inner_join(count(d_tidy, assunto), 'assunto') %>% 
+  mutate_at(vars(-assunto, -n), 
+            funs(sprintf('%d (%s)', ., scales::percent(./n)))) %>% 
+  mutate(assunto = str_trunc(assunto, 30)) %>% 
+  arrange(desc(n)) %>% 
+  rename(Total = n) %>% 
+  knitr::kable()
+
+```
+
+```{r}
+assuntos_new <- c('9985', '10370', '10028', '10051', '10029', '9633',
+                  '9964', '11818', '1156', '14', '6031', '6071', '6033', 
+                  '6039', '10062', '10063', '10058',
+                  '10055', '10059', '10054', '10053', '10052', '10060', 
+                  '10056', '10057', '10061', '10051',
+                  '10029', '10377', '10380', '9966', '12006', '11998', 
+                  '7620', '6077', '6037') %>% 
+  enframe() %>% 
+  set_names(c('id', 'cod_leaf')) %>% 
+  inner_join(assuntos, 'cod_leaf') %>%
+  with(cod_leaf)
+setdiff(assuntos_newa)
+
+```
+
