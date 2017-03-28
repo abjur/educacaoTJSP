@@ -225,6 +225,10 @@ tab <- res %>%
   rename(Total = n) %>% 
   knitr::kable()
 
+'d_tjsp_educ.rds' %>% 
+  readRDS() %>% 
+  saveRDS('d_tjsp_educ2.rds', compress = 'bzip2')
+
 ```
 
 ```{r}
