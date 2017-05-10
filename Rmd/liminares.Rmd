@@ -1,0 +1,31 @@
+---
+title: "Liminares"
+author: "J"
+date: "April 19, 2017"
+output: html_document
+---
+
+```{r}
+setwd('../data-raw/')
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(pdftools)
+arqs <- dir('liminares', full.names = TRUE)
+text <- map(arqs, pdf_text)
+```
+
+```{r}
+library(tidyverse)
+u <- 'http://dados.prefeitura.sp.gov.br/dataset/8da55b0e-b385-4b54-9296-d0000014ddd5/resource/a6d8dba5-5959-4e57-903a-09e127e228a5/download/escolasr34.csv'
+d <- u %>% 
+  read_csv2() %>% 
+  janitor::clean_names()
+
+```
+

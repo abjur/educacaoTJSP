@@ -1,0 +1,133 @@
+---
+title: "Análise das metas"
+date: "May 10, 2017"
+output: pdf_document
+---
+
+```{r}
+setwd('../data-raw/')
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE,warning=FALSE, message=FALSE)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(janitor)
+library(abjutils)
+library(stringr)
+library(readxl)
+d_creches <- 'creches.xlsx' %>% 
+  read_excel(skip = 1) %>%
+  clean_names() %>% 
+  select(-x_1, -x_2) %>% 
+  filter(distrito != 'Total Geral') %>% 
+  gather(tipo_ano, valor, -distrito) %>% 
+  separate(tipo_ano, c('ano', 'tipo'), sep = '_', fill = 'right') %>%  
+  mutate(tipo = if_else(is.na(tipo), 'matricula', 'demanda'),
+         ano = parse_number(ano)) %>% 
+  spread(tipo, valor)
+```
+
+```{r warning=FALSE, message=FALSE}
+ler <- function(arq) {
+  arq %>% 
+    read_csv2(locale = locale(encoding = 'latin1')) %>% 
+    clean_names() %>% 
+    select(distrito = 2, ano = 3, faixa = 4, pop = total) %>% 
+    filter(faixa == '00 a 03 anos') %>% 
+    select(-faixa) %>% 
+    mutate(distrito = rm_accent(toupper(distrito)))
+}
+
+d_pop <- dir('.', pattern = 'DIS_FXE', full.names = TRUE) %>% 
+  map_df(ler)
+```
+
+```{r}
+d_tidy <- d_creches %>% 
+  inner_join(d_pop, c("distrito", "ano"))
+```
+
+As bases de dados utilizadas nessa análise são de duas fontes distintas.
+
+A primeira foi enviada pela defensoria, contendo o volume de matrículas e demanda não atendida em cada um dos 96 distritos do município de São Paulo, nos anos de 2013 a 2016. A segunda foi obtida diretamente do site da Fundação SEADE e contém projeções da população de crianças com idades entre zero e três anos, para os anos de 2011 a 2020.
+
+## Comparação das metas com os dados obtidos
+
+Descrição da meta:
+
+> Expandir em 30% as vagas de creche, de forma a alcançar 60% da taxa de atendimento de crianças de 0 a 3 anos.
+
+1. Descrição do indicador: 
+    1. Número de vagas públicas ofertadas em creche; 
+    1. Taxa de atendimento em creche das crianças de 0 a 3 anos.
+1. Fórmula de cálculo:
+    1. Número de vagas públicas ofertadas em 31/12 
+    1. Número de crianças matriculadas em creche / número de crianças de 0 a 3 anos na população do município de São Paulo
+1. Valores-base:
+    1. 284.217 vagas;
+    2. 44% de atendimento de criançasde 0 a 3 anos
+1. Ano base:
+    1. 2016;
+    1. 2015
+
+Alguns comentários:
+
+1. Expandir em 30% as vagas em creche significa um aumento em valores absolutos de 284217 * 0.3 = 85266 vagas.
+1. Não ficou claro o ano-base utilizado para calcular 4.2. A taxa de atendimento é dada pela razão entre matriculados e população de zero a três anos e, segundo 4.1, o ano-base utilizado para o numerador é 2016. 
+    1. Se isso significar que foi utilizado o ano de 2016 para o numerador e o ano de 2015 para o denominador, chegamos a uma taxa de 42,25% de atendimento (razão entre 284217 e 672684, a população segundo os dados da Fundação SEADE), que é menor que 44%.
+    1. Se ao invés disso foi usado o ano de 2016 para o numerador e o ano de 2016 para o denominador, chegamos a uma taxa de 43,13% de atendimento (razão entre 284217 e 658993, a população segundo os dados da Fundação SEADE), que é menor que 44%.
+    1. Se ao invés disso foi usado o ano de 2015 para o numerador e o ano de 2015 para o denominador, não é possível verificar o dado com precisão, pois não foi informado no programa o valor-base de matrículas em 2015. Segundo nossa base de dados, a taxa seria de 37,21%, pois na base temos 250303 matriculados em 2015.
+1. Não ficou claro o que significa alcançar 60% da taxa de atendimento de crianças de zero a três anos.
+    1. Sabe-se que a população muda ao longo do tempo. Logo, faz sentido utilizar a projeção da população dada pela Fundação SEADE.
+    1. A tabela abaixo mostra a quantidade de matrículados necessária para atingir 60% de atendimento, utilizando-se a população de cada ano no denominador.
+    1. O número obtido (terceira linha da tabela) para 2016 não é coerente com o número de vagas de 85266 a ser criado.
+    
+```{r}
+d_pop %>% 
+  group_by(ano) %>% 
+  summarise_if(is.numeric, sum) %>% 
+  mutate(meta = ceiling(pop * .6),
+         `meta-demanda` = meta - 284217) %>% 
+  filter(ano >= 2016) %>% 
+  gather(key, val, -ano) %>% 
+  spread(ano, val) %>% 
+  slice(c(3, 1, 2)) %>% 
+  rename(`Projeções` = key) %>% 
+  mutate(`Projeções` = c('População', 
+                 'Meta (População * 60%)', 
+                 'Diferença entre meta e matriculados')) %>% 
+  knitr::kable()
+```
+
+## Expansão da meta para atendimento em todos os distritos
+
+É importante considerar que atingir uma meta global de 60% de atendimento não significa atender 60% de atendimento em cada distrito. 
+
+Utilizando como critério para definição de taxa de atendimento a quantidade de 283556 matriculados da base da defensoria e população de 658993 crianças da Fundação SEADE, ambas no ano de 2016, chegaríamos a um atendimento de 60% com 111840 novas vagas[^obs]. 
+
+[^obs]: Note que a quantidade de matriculados é próximo ao valor base de 284217 utilizado no programa de metas e por isso o número 111840 é próximo ao valor de 111179 da primeira tabela.
+
+A tabela abaixo mostra a quantidade de vagas a serem criadas em cada distrito do município, usando como meta a taxa de 60% de atendimento e os dados de matriculados da base de dados da defensoria no ano de 2016. Os distritos que já atingiram a meta foram retirados. O total de vagas a serem criadas segundo esse critério é de 118859, que é maior que o número de vagas a serem criadas desconsiderando-se os distritos.
+
+```{r}
+d_tidy %>% 
+  filter(ano == 2016) %>% 
+  select(-demanda, -ano) %>% 
+  mutate(meta = ceiling(pop * 0.6),
+         diferenca = meta - matricula) %>% 
+  filter(diferenca > 0) %>% 
+  arrange(desc(diferenca)) %>% 
+  setNames(c('Distrito', 'Matriculados', 'População', 'Meta', 'Diferença')) %>% 
+  # add_row(Distrito = 'Total', 
+  #         Matriculados = '',
+  #         População = '',
+  #         Meta = '',
+  #         Diferença = sum(.$Diferença)) %>% 
+  add_totals_row() %>% 
+  knitr::kable()
+```
+
+

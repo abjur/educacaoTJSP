@@ -1,0 +1,376 @@
+---
+title: "Dados da Defensoria"
+author: "J"
+date: "April 26, 2017"
+output: pdf_document
+---
+
+```{r}
+setwd('../data-raw/')
+```
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE)
+```
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(stringr)
+library(readxl)
+d_creches <- read_excel('creches.xlsx') %>% 
+  setNames(c('distrito', 'm_2013', 'm_2014', 'm_2015', 'm_2016',
+             'd_2013', 'd_2014', 'd_2015', 'd_2016')) %>% 
+  slice(-1) %>% 
+  filter(distrito != 'Total Geral') %>% 
+  gather(tipo_ano, valor, -distrito) %>% 
+  separate(tipo_ano, c('tipo', 'ano')) %>% 
+  mutate(tipo = if_else(tipo == 'm', 'Matriculados', 'Demanda não atendida'),
+         ano = as.integer(ano))
+```
+
+## No tempo
+
+```{r warning=FALSE, message=FALSE, fig.width=9}
+p <- d_creches %>% 
+  group_by(tipo, ano) %>% 
+  tally(valor) %>% 
+  ggplot(aes(x = ano, y = n / 1000, colour = tipo)) +
+  geom_line() +
+  geom_point(size = 2) +
+  theme_bw(16) +
+  labs(x = 'Ano', y = 'Quantidade (milhares)') +
+  ggtitle('Volume de matriculados e demandas não atendidas',
+          'Entre 2013 e 2016')
+# plotly::ggplotly(p)
+p
+```
+
+## População
+
+- Fazer usando IBGE - Criancas (0 a 3) (4 a 5 - pré escola)
+
+```{r}
+cc <- cols(
+  `Dist Adm Res` = col_character(),
+  `2010` = col_integer(),
+  `2011` = col_integer(),
+  `2012` = col_integer(),
+  `2013` = col_integer(),
+  `2014` = col_integer(),
+  `2015` = col_integer(),
+  `2016` = col_integer(),
+  `2017` = col_integer()
+)
+pop_04 <- read_csv2('populacao_0-4.csv', col_types = cc) %>% 
+  janitor::clean_names() %>% 
+  mutate(dist_adm_res = abjutils::rm_accent(toupper(dist_adm_res))) %>% 
+  gather(ano, pop, -dist_adm_res) %>% 
+  rename(distrito = dist_adm_res) %>% 
+  mutate(ano = parse_number(ano)) %>% 
+  arrange(ano)
+
+p <- pop_04 %>% 
+  ggplot(aes(x = ano, y = pop, colour = distrito)) +
+  geom_line(alpha = .4, show.legend = FALSE) +
+  # guides(colour = FALSE) +
+  theme_bw()
+# plotly::ggplotly(p)
+
+cc2 <- cols(
+  `Código Localidade` = col_integer(),
+  `Nome Localidade` = col_character(),
+  Ano = col_integer(),
+  `Faixa Etária - Escolar` = col_character(),
+  Total = col_number()
+)
+
+ler <- function(arq) {
+  arq %>% 
+      read_csv2(locale = locale(encoding = 'latin1'), col_types = cc2) %>% 
+      janitor::clean_names() %>% 
+      select(distrito = 2, ano = 3, faixa = 4, pop = total) %>% 
+      filter(faixa == '00 a 03 anos') %>% 
+      select(-faixa) %>% 
+      mutate(distrito = abjutils::rm_accent(toupper(distrito)))
+}
+pop_03 <- dir('.', pattern = 'DIS_FXE') %>% 
+  map_df(ler)
+
+```
+
+
+```{r warning=FALSE, message=FALSE}
+library(httr)
+library(rvest)
+# http://www.ibge.gov.br/home/estatistica/populacao/censo2010/sinopse/sinopse_tab_subdistrito_zip.shtm
+# http://aurelioschmitt.blogspot.com.br/2011/06/sao-paulo-41.html
+
+u <- 'http://aurelioschmitt.blogspot.com.br/2011/06/sao-paulo-41.html'
+pop_distritos_txt <- u %>% 
+  GET() %>% 
+  content('text') %>% 
+  read_html() %>% 
+  html_node('#post-body-3414377257452542997') %>% 
+  html_nodes('b') %>% 
+  html_text() %>% 
+  enframe()
+
+d_pop_distritos <- pop_distritos_txt %>% 
+  filter(str_detect(value, ' - '), str_detect(value, 'São Paulo')) %>% 
+  separate(value, c('distrito', 'muni', 'sp_pop'), sep = ' - ') %>% 
+  select(muni, distrito, sp_pop) %>% 
+  mutate_all(funs(toupper(abjutils::rm_accent(.)))) %>% 
+  filter(muni == 'SAO PAULO') %>% 
+  mutate(pop = parse_number(sp_pop, locale = locale(grouping_mark = '.'))) %>% 
+  select(distrito, pop)
+```
+
+```{r}
+d_creches %>% 
+  group_by(distrito, ano) %>% 
+  tally(valor) %>% 
+  rename(demanda = n) %>% 
+  group_by(distrito) %>% 
+  summarise(demanda_media = mean(demanda)) %>% 
+  inner_join(distinct(pop_04, distrito, .keep_all = TRUE), c('distrito')) %>% 
+  mutate(razao = demanda_media / pop * 1000) %>%
+  arrange(desc(pop)) %>% 
+  knitr::kable()
+```
+
+
+# Razão entre 2013-2014 e 2015-2016
+
+## Matriculados
+
+```{r}
+d_creches %>% 
+  group_by(distrito, tipo) %>% 
+  summarise(razao = round(sum(valor[ano > 2014]) / sum(valor[ano <= 2014]), 4)) %>% 
+  spread(tipo, razao) %>% 
+  arrange(desc(Matriculados)) %>% 
+  mutate(Matriculados = scales::percent(Matriculados - 1)) %>% 
+  knitr::kable()
+```
+
+## Demanda não atendida
+
+```{r}
+d_creches %>% 
+  group_by(distrito, tipo) %>% 
+  summarise(razao = round(sum(valor[ano > 2014]) / sum(valor[ano <= 2014]), 4)) %>% 
+  spread(tipo, razao) %>% 
+  arrange(`Demanda não atendida`) %>% 
+  mutate(`Redução demanda não atendida` = scales::percent(1 - `Demanda não atendida`)) %>% 
+  knitr::kable()
+```
+
+
+## Atendimento
+
+```{r}
+d_atendidos <- d_creches %>% 
+  mutate(tipo = if_else(tipo == 'Matriculados', 'm', 'd')) %>% 
+  mutate(ano_gr = if_else(ano <= 2014, '2013-2014', '2015-2016')) %>% 
+  group_by(distrito, ano_gr, tipo) %>% 
+  tally(valor) %>% 
+  spread(tipo, n) %>% 
+  mutate(atendidos = m / (m + d)) %>% 
+  select(-d, -m) %>% 
+  group_by(distrito) %>% 
+  summarise(razao = atendidos[ano_gr == '2015-2016'] / 
+              atendidos[ano_gr == '2013-2014'] - 1) 
+
+d_atendidos %>% 
+  arrange(desc(razao)) %>% 
+  mutate(`Aumento na taxa de atendimento` = scales::percent(razao)) %>% 
+  knitr::kable()
+```
+
+```{r}
+
+d_creches %>% 
+  filter(ano == 2016) %>% 
+  mutate(tipo = if_else(tipo == 'Matriculados', 'm', 'd')) %>% 
+  group_by(tipo) %>% 
+  tally(valor) %>% 
+  spread(tipo, n) %>% 
+  mutate(atendidos = m / (m + d))
+
+```
+
+
+## Mapa
+
+```{r, fig.width=6, fig.height=8}
+d_sf <- sf::read_sf('Distrito/LAYER_DISTRITO/DEINFO_distrito.shp') %>% 
+  merge(d_atendidos, by.x = 'ds_nome', by.y =  'distrito')
+plot(d_sf[, 'razao'])
+# sf::st_crs(d_sf)$epsg <- '4326'
+# ggplot(d_sf) +
+#   geom_sf(data = d_sf)
+```
+
+
+--------------------------------------------------------------------------------
+
+```{r}
+d_atendimento <- d_creches %>% 
+  mutate(tipo = if_else(tipo == 'Matriculados', 'm', 'd')) %>% 
+  spread(tipo, valor) %>% 
+  left_join(pop_03, c('distrito', 'ano')) %>% 
+  mutate(atendidos = m / pop) %>% 
+  mutate(falta = pop * .6 - m) %>% 
+  mutate(falta2 = d - pop * .03)
+
+# p <- d_atendimento %>% 
+#   ggplot(aes(x = ano, y = falta, colour = distrito)) +
+#   geom_line(alpha = .4, show.legend = FALSE)
+# plotly::ggplotly(p)
+```
+
+```{r}
+d_creches %>% 
+  mutate(tipo = if_else(tipo == 'Matriculados', 'm', 'd')) %>% 
+  spread(tipo, valor) %>% 
+  left_join(pop_03, c('distrito', 'ano')) %>% 
+  summarise(pop2016 = sum(pop[ano == 2016]),
+            m2015 = sum(m[ano == 2015]),
+            vbase = 284217, 
+            falta = pop2016 * .6 - m2015,
+            falta2 = pop2016 * .6 - vbase,
+            atendimento = scales::percent(sum(m[ano == 2015]) / pop2016)) %>% 
+  gather()
+```
+
+Quantas vagas faltam por distrito?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  arrange(desc(falta)) %>% 
+  mutate(falta = ceiling(falta))
+```
+
+População versus demanda não atendida
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  mutate(razao = d / pop, atendidos = round(atendidos, 3)) %>% 
+  arrange(desc(razao))
+```
+
+Quantas vagas faltam para atingir 60% em todos os distritos?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016, falta >= 0) %>% 
+  arrange(desc(falta)) %>% 
+  summarise(total = ceiling(sum(falta)))
+```
+
+Quantas vagas faltam no total?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  summarise(falta = ceiling((sum(pop) * .6 - sum(m))))
+```
+
+Outro critério: não atendimento < 3% da população
+
+Qual é o não atendimento atual?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  summarise(sum(d) / sum(pop))
+```
+
+Lista dos que faltam
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  mutate(razao = d / pop) %>% 
+  arrange(desc(razao))
+```
+
+Quantas vagas faltam para atingir < 3% em todos os distritos?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016, falta2 >= 0) %>% 
+  arrange(desc(falta2)) %>% 
+  summarise(total = ceiling(sum(falta2)))
+```
+
+Quantas vagas faltam no total?
+
+```{r}
+d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  summarise(falta2 = ceiling(sum(d) - sum(pop) * .03))
+```
+
+Gráficos de critérios
+
+```{r}
+t1 <- tibble(tipo = 'matricula', crit = 5:8 / 10, n_crit = d_sum$pop * crit - d_sum$m)
+t2 <- tibble(tipo = 'demanda', crit = 0:10 / 100, n_crit = d_sum$d - d_sum$pop * crit)
+n_crit1 <- d_sum$pop * .6 - d_sum$m
+n_crit2 <- d_sum$d - d_sum$pop * .01
+bind_rows(t1, t2) %>% 
+  ggplot(aes(x = crit, y = n_crit)) +
+  geom_line() +
+  facet_wrap(~tipo, scales = 'free', ncol = 1) +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::percent) +
+  theme_bw(16) +
+  geom_hline(yintercept = n_crit1, colour = 'red') +
+  geom_hline(yintercept = n_crit2, colour = 'blue')
+```
+
+```{r fig.width=10}
+vagas_necessarias <- map_dbl(seq(5/10, 8/10, length.out = 100), function(x) {
+  d_atendimento %>% 
+    filter(ano == 2016) %>% 
+    mutate(falta = pop * x - m) %>% 
+    filter(falta >= 0) %>% 
+    summarise(s = sum(falta)) %>% 
+    with(s)
+})
+
+d_sum <- d_atendimento %>% 
+  filter(ano == 2016) %>% 
+  summarise(d = sum(d), m = sum(m), pop = sum(pop))
+
+t1 <- tibble(tipo = 'total', crit = seq(5/10, 7.5/10, length.out = 100), 
+             n_crit = d_sum$pop * crit - d_sum$m)
+t2 <- tibble(tipo = 'por distrito', crit = seq(5/10, 7.5/10, length.out = 100), 
+             n_crit = vagas_necessarias)
+{bind_rows(t1, t2) %>% 
+  ggplot(aes(x = crit, y = n_crit, colour = tipo)) +
+  geom_line() +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::percent) +
+  theme_bw(16)} %>% 
+  plotly::ggplotly()
+```
+
+
+
+```{r}
+f <- function(x) {
+  dbinom(x, 1, .5)
+}
+x <- rbinom(1000, 1, .5)
+tibble(x = sort(x), y = cumsum(f(x)) / sum(x)) %>% 
+  distinct(x, .keep_all = TRUE) %>% 
+  mutate(xend = lead(x, default = 2)) %>% 
+  ggplot(aes(x, y, xend = xend, yend = y)) +
+  geom_segment() +
+  geom_point()
+```
+
