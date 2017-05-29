@@ -106,6 +106,17 @@ ggsave('mapa.png', p, width = 8, height = 5)
 p
 ```
 
+```{r}
+d_tidy_2016 %>% 
+  arrange(desc(demanda)) %>% 
+  select(distrito, demanda, matricula, pop) %>% 
+  mutate(atendimento = matricula / pop) %>% 
+  setNames(stringr::str_to_title(names(.))) %>% 
+  head(20) %>% 
+  openxlsx::write.xlsx('demanda.xlsx')
+```
+
+
 
 --------------------------------------------------------------------------------
  
