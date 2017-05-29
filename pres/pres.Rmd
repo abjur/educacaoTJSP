@@ -1,0 +1,118 @@
+---
+title: "Apresentação Gotti"
+date: "May 28, 2017"
+---
+
+```{r, echo=FALSE}
+knitr::opts_chunk$set(echo=FALSE,warning=FALSE, message=FALSE)
+```
+
+Oi Julio
+ 
+Como falamos, gostaria de saber se você poderia me ajudar com os slides para eu mostrar os benefícios da decisão de 2013 e suas potencialidades:
+ 
+a)      Benefícios
+ 
+Essa reportagem (https://www.brasildefato.com.br/node/26117/ ) mostra um mapa com a fila de espera e 20 distritos com maior demanda em out/2013 (a decisão é de dez/2013).
+ 
+# Mapa do atendimento das demandas
+
+```{r echo=FALSE,warning=FALSE, message=FALSE}
+library(tidyverse)
+library(janitor)
+library(abjutils)
+library(stringr)
+library(readxl)
+d_creches <- '../data-raw/creches.xlsx' %>% 
+  read_excel(skip = 1) %>%
+  clean_names() %>% 
+  select(-x_1, -x_2) %>% 
+  filter(distrito != 'Total Geral') %>% 
+  gather(tipo_ano, valor, -distrito) %>% 
+  separate(tipo_ano, c('ano', 'tipo'), sep = '_', fill = 'right') %>%  
+  mutate(tipo = if_else(is.na(tipo), 'matricula', 'demanda'),
+         ano = parse_number(ano)) %>% 
+  spread(tipo, valor)
+ler <- function(arq) {
+  arq %>% 
+    read_csv2(locale = locale(encoding = 'latin1')) %>% 
+    clean_names() %>% 
+    select(distrito = 2, ano = 3, faixa = 4, pop = total) %>% 
+    filter(faixa == '00 a 03 anos') %>% 
+    select(-faixa) %>% 
+    mutate(distrito = rm_accent(toupper(distrito)))
+}
+
+d_pop <- dir('../data-raw', pattern = 'DIS_FXE', full.names = TRUE) %>% 
+  map_df(ler)
+d_tidy <- d_creches %>% 
+  inner_join(d_pop, c("distrito", "ano"))
+
+```
+
+Será que com os dados que você já apurou conseguimos “remontar” o mapa com a situação atual (2017) nos mesmos 20 distritos e a fila de espera atual? (http://www.redebrasilatual.com.br/educacao/2017/04/fila-da-creche-ja-tem-21-mil-criancas-a-mais-que-a-meta-de-vagas-de-doria-para-2018 )
+
+```{r warning=FALSE, message=FALSE}
+d_tidy_2016 <- d_tidy %>% 
+  filter(ano == 2016) %>% 
+  as.data.frame()
+
+path1 <- '../data-raw/Distrito/LAYER_DISTRITO/DEINFO_distrito.shp'
+map <- rgdal::readOGR(path1, verbose = FALSE)
+map@data <- map@data %>% 
+  mutate(ds_nome = as.character(ds_nome))
+d_map <- fortify(map, region = 'ds_nome') %>% 
+  inner_join(d_tidy_2016, c('id' = 'distrito'))
+```
+
+```{r width=5, height=12, warning=FALSE, message=FALSE}
+library(ggrepel)
+d2020 <- d_map %>% 
+  group_by(id) %>% 
+  summarise(long = mean(long), lat = mean(lat), demanda = first(demanda)) %>% 
+  arrange(desc(demanda)) %>% 
+  filter(demanda > 3000) %>% 
+  mutate(tipo = if_else(demanda > 5000, '#FF000095', '#FF999995'))
+
+
+p <- d_map %>% 
+  mutate(demanda = cut(
+    x = demanda, 
+    breaks = c(0, 3000, 5000, 8000),
+    include.lowest = TRUE, dig.lab = 10
+  )) %>% {
+    ggplot(., aes(x = long, y = lat)) +
+      geom_map(aes(map_id = id, fill = demanda), 
+               map = ., colour = 'black', size = 0.1) +
+      coord_equal() +
+      scale_fill_brewer(palette = 'PuRd') +
+      geom_label_repel(aes(label = sprintf('%s\n(%s)', id, demanda)), 
+                       data = d2020, 
+                       box.padding = unit(.5, "lines"),
+                       fill = d2020$tipo,
+                       force = 10,
+                       size = 2.5,
+                       fontface = "bold") +
+      geom_point(data = d2020, colour = 'black') +
+      scale_x_continuous(limits = with(d_map, range(long) + c(-2e4, +2e4))) +
+      # scale_y_continuous(limits = with(d_map, range(lat) + c(-3e4, +3e4))) +
+      theme_void() +
+      labs(fill = '') +
+      theme(legend.position = c(0.69, 0.25)) +
+      ggtitle('Demanda não atendida - final de 2016',
+              'Fonte: Defensoria pública. Dados obtidos em 22/04/2017.')
+  }
+ggsave('mapa.png', p, width = 8, height = 5)
+p
+```
+
+
+--------------------------------------------------------------------------------
+ 
+b)     Potencialidades
+ 
+Seria legal fazer um slide que dê uma ideia de como poderia funcionar uma base de dados  comum (Poder Judiciário --Secretaria Municipal de Educação -- Defensoria/Ministério Público) para “cruzamento” das informações relativas à fila de espera, demanda e construção de novos equipamentos ações judiciais →   Redução de litigiosidade
+ 
+Consegue me ajudar com isso?
+ 
+Te envio o esqueleto da minha apresentação em ppt.
