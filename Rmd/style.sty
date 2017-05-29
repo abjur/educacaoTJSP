@@ -1,0 +1,69 @@
+\usepackage{fancyhdr}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[portuguese]{babel}
+\usepackage{graphicx}
+\usepackage{indentfirst}
+% \usepackage{geometry}
+% \usepackage[colorlinks=true,urlcolor=blue,citecolor=blue,linkcolor=blue]{hyperref}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{pdfpages}
+
+\setkeys{Gin}{width=\textwidth,height=\textheight,keepaspectratio}
+
+\renewcommand{\familydefault}{\sfdefault}
+
+\newcommand{\prestadorEmpresaFoot}{Associação Brasileira de Jurimetria}
+\newcommand{\prestadorEmpresa}{Associação Brasileira de Jurimetria}
+\newcommand{\prestadorRepr}{Marcelo Guedes Nunes}
+\newcommand{\prestadorEnderecoFoot}{Rua Leopoldo Couto de Magalhães Júnior, 146, 7º andar. CEP 04542-000 - São Paulo, SP, Brasil.}
+\newcommand{\prestadorEndereco}{Rua Leopoldo Couto de Magalhães Júnior, 146, 7º andar}
+\newcommand{\prestadorEnderecoComp}{CEP 04542-000 - São Paulo, SP, Brasil}
+\newcommand{\prestadorSite}{\url{http://abj.org.br}}
+\newcommand{\prestadorEmail}{mnunes@abj.org.br}
+\newcommand{\logo}{\includegraphics[width=0.21\textwidth, trim=0cm 0cm 0cm 11.1cm, clip]{logo.png}}
+
+\fancypagestyle{firststyle}
+{
+    \pagestyle{fancy}
+    \lhead{\thepage}
+    \chead{}
+    \rhead{\logo{}}
+    \cfoot{
+        \footnotesize{\prestadorEmpresaFoot{}} \\
+        \footnotesize{\prestadorEnderecoFoot{}} \\
+        \footnotesize{\prestadorSite{}}
+    }
+    \renewcommand{\headrulewidth}{0.5pt}
+    \renewcommand{\footrulewidth}{0.5pt}
+    \setlength{\headsep}{.5in}
+}
+
+\fancypagestyle{pag1}
+{
+    \vspace{-.6em}
+    \pagestyle{fancy}
+    \lhead{}
+    \chead{}
+    \rhead{\logo{}}
+    \cfoot{
+        \footnotesize{\prestadorEmpresaFoot{}} \\
+        \footnotesize{\prestadorEnderecoFoot{}} \\
+        \footnotesize{\prestadorSite{}}
+    }
+    \vphantom{text}
+    \renewcommand{\headrulewidth}{0.5pt}
+    \renewcommand{\footrulewidth}{0.5pt}
+    \setlength{\headsep}{.95in}
+}
+
+\pagestyle{firststyle}
+
+\setlength{\parindent}{2em}
+% \setlength{\parskip}{1em}
+% \renewcommand{\baselinestretch}{1.2}
+% % \usepackage{palatino}
+% \renewcommand{\familydefault}{\sfdefault} % sans serif
+% \fontfamily{ppl}\selectfont
+
+\renewcommand{\baselinestretch}{1.4}

@@ -1,10 +1,14 @@
 ---
-title: "Análise das metas"
-date: "May 10, 2017"
-output: pdf_document
+title: "Análise do plano de metas de São Paulo: creches"
+author: "Associação Brasileira de Jurimetria"
+date: "`r format(Sys.Date(), '%d de %B de %Y')`"
+linkcolor: "blue"
+geometry: bmargin=1.5in,lmargin=.8in,rmargin=.8in,tmargin=.7in
 ---
 
-```{r}
+# Introdução
+
+```{r echo=F}
 setwd('../data-raw/')
 ```
 
@@ -18,7 +22,7 @@ library(janitor)
 library(abjutils)
 library(stringr)
 library(readxl)
-d_creches <- 'creches.xlsx' %>% 
+d_creches <- '../data-raw/creches.xlsx' %>% 
   read_excel(skip = 1) %>%
   clean_names() %>% 
   select(-x_1, -x_2) %>% 
@@ -41,7 +45,7 @@ ler <- function(arq) {
     mutate(distrito = rm_accent(toupper(distrito)))
 }
 
-d_pop <- dir('.', pattern = 'DIS_FXE', full.names = TRUE) %>% 
+d_pop <- dir('../data-raw', pattern = 'DIS_FXE', full.names = TRUE) %>% 
   map_df(ler)
 ```
 
@@ -54,7 +58,7 @@ As bases de dados utilizadas nessa análise são de duas fontes distintas.
 
 A primeira foi enviada pela defensoria, contendo o volume de matrículas e demanda não atendida em cada um dos 96 distritos do município de São Paulo, nos anos de 2013 a 2016. A segunda foi obtida diretamente do site da Fundação SEADE e contém projeções da população de crianças com idades entre zero e três anos, para os anos de 2011 a 2020.
 
-## Comparação das metas com os dados obtidos
+# Comparação das metas com os dados obtidos
 
 Descrição da meta:
 
@@ -81,9 +85,9 @@ Alguns comentários:
     1. Se ao invés disso foi usado o ano de 2016 para o numerador e o ano de 2016 para o denominador, chegamos a uma taxa de 43,13% de atendimento (razão entre 284217 e 658993, a população segundo os dados da Fundação SEADE), que é menor que 44%.
     1. Se ao invés disso foi usado o ano de 2015 para o numerador e o ano de 2015 para o denominador, não é possível verificar o dado com precisão, pois não foi informado no programa o valor-base de matrículas em 2015. Segundo nossa base de dados, a taxa seria de 37,21%, pois na base temos 250303 matriculados em 2015.
 1. Não ficou claro o que significa alcançar 60% da taxa de atendimento de crianças de zero a três anos.
-    1. Sabe-se que a população muda ao longo do tempo. Logo, faz sentido utilizar a projeção da população dada pela Fundação SEADE.
+    1. Sabemos que a população muda ao longo do tempo. Logo, faz sentido utilizar a projeção da população dada pela Fundação SEADE.
     1. A tabela abaixo mostra a quantidade de matrículados necessária para atingir 60% de atendimento, utilizando-se a população de cada ano no denominador.
-    1. O número obtido (terceira linha da tabela) para 2016 não é coerente com o número de vagas de 85266 a ser criado.
+    1. A terceira linha da tabela abaixo mostra a diferença entre a meta (60% população de crianças com zero a três anos de idade, para cada ano) e a quantidade de crianças matriculadas de acordo com o programa de metas (284217). Intuitivamente, esse número deveria ser similar a 85266, que é a quantidade de vagas a serem criadas em número absoluto. No entanto, observamos valores muito diferentes na tabela para os anos de 2016 e 2017. Por isso é importante deixar claro o que significa alcançar 60% da taxa de atendimento e qual o critério para definir o tamanho da população.
     
 ```{r}
 d_pop %>% 
@@ -98,11 +102,11 @@ d_pop %>%
   rename(`Projeções` = key) %>% 
   mutate(`Projeções` = c('População', 
                  'Meta (População * 60%)', 
-                 'Diferença entre meta e matriculados')) %>% 
-  knitr::kable()
+                 'Vagas a serem criadas (Meta - 284217)')) %>% 
+  knitr::kable(longtable = TRUE, caption = 'Projeção das populações e metas.')
 ```
 
-## Expansão da meta para atendimento em todos os distritos
+# Expansão da meta para atendimento em todos os distritos
 
 É importante considerar que atingir uma meta global de 60% de atendimento não significa atender 60% de atendimento em cada distrito. 
 
@@ -113,22 +117,52 @@ Utilizando como critério para definição de taxa de atendimento a quantidade d
 A tabela abaixo mostra a quantidade de vagas a serem criadas em cada distrito do município, usando como meta a taxa de 60% de atendimento e os dados de matriculados da base de dados da defensoria no ano de 2016. Os distritos que já atingiram a meta foram retirados. O total de vagas a serem criadas segundo esse critério é de 118859, que é maior que o número de vagas a serem criadas desconsiderando-se os distritos.
 
 ```{r}
+tx_tot <- d_tidy %>% 
+  filter(ano == 2016) %>% 
+  summarise(tx = sum(matricula) / sum(pop)) %>% 
+  with(tx)
+  
 d_tidy %>% 
   filter(ano == 2016) %>% 
   select(-demanda, -ano) %>% 
-  mutate(meta = ceiling(pop * 0.6),
+  mutate(atendimento = (matricula /  pop),
+         meta = ceiling(pop * 0.6),
          diferenca = meta - matricula) %>% 
   filter(diferenca > 0) %>% 
   arrange(desc(diferenca)) %>% 
-  setNames(c('Distrito', 'Matriculados', 'População', 'Meta', 'Diferença')) %>% 
+  setNames(c('Distrito', 'Matriculados', 'População', 'Atendimento atual', 'Meta', 'Vagas')) %>% 
   # add_row(Distrito = 'Total', 
   #         Matriculados = '',
   #         População = '',
   #         Meta = '',
   #         Diferença = sum(.$Diferença)) %>% 
   add_totals_row() %>% 
-  knitr::kable()
+  mutate(`Atendimento atual` = if_else(`Atendimento atual` > 1, 
+                                       tx_tot, `Atendimento atual`)) %>% 
+  mutate(`Atendimento atual` = scales::percent(`Atendimento atual`)) %>% 
+  knitr::kable(longtable = TRUE, caption = 'Metas por distrito.')
 ```
+
+
+\vspace{0.2in}
+
+\begin{flushright}
+São Paulo, 16 de Maio de 2016.
+\end{flushright}
+
+\vspace{0.8in}
+
+\begin{center}
+
+\vspace{-0.5in}
+\makebox[3in]{\hrulefill} \\
+Julio Trecenti \\
+Diretor-técnico da Associação Brasileira de Jurimetria \\
+Membro Integrante do GEAL-CRASP
+\end{center}
+
+
+
 
 
 
