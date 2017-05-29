@@ -6,6 +6,7 @@ linkcolor: "blue"
 geometry: bmargin=1.5in,lmargin=.8in,rmargin=.8in,tmargin=.7in
 ---
 
+
 # Introdução
 
 ```{r echo=F}
