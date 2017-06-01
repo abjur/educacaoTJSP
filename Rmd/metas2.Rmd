@@ -89,7 +89,7 @@ Alguns comentários:
     1. Sabemos que a população muda ao longo do tempo. Logo, faz sentido utilizar a projeção da população dada pela Fundação SEADE.
     1. A tabela abaixo mostra a quantidade de matrículados necessária para atingir 60% de atendimento, utilizando-se a população de cada ano no denominador.
     1. A terceira linha da tabela abaixo mostra a diferença entre a meta (60% população de crianças com zero a três anos de idade, para cada ano) e a quantidade de crianças matriculadas de acordo com o programa de metas (284217). Intuitivamente, esse número deveria ser similar a 85266, que é a quantidade de vagas a serem criadas em número absoluto. No entanto, observamos valores muito diferentes na tabela para os anos de 2016 e 2017. Por isso é importante deixar claro o que significa alcançar 60% da taxa de atendimento e qual o critério para definir o tamanho da população.
-    
+
 ```{r}
 d_pop %>% 
   group_by(ano) %>% 

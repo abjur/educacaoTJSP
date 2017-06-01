@@ -61,34 +61,6 @@ d_map <- fortify(map, region = 'ds_nome') %>%
   inner_join(d_tidy_2016, c('id' = 'distrito'))
 ```
 
-```{r}
-d_map %>% 
-  group_by(id) %>% 
-  summarise(long = mean( long), ) %>% 
-  arrange()
-
-
-d_map %>% 
-  group_by(is) %>% 
-  summarise9long = mean( long), lat = mean(lat)) %>% 
-  summarise(mean(x)
-            )
-mtcars %>% 
-  ggplot(aes(x = mpg, y = disp)) +
-  geom_point() +
-  theme_bw(16) +
-  geom_smooth(method = "lm", formula = y ~ x, se = FALSE) +
-  theme(axis.text = element_text(angle = 45, hjust = 1))
-
-```
-
-```{r}
-mtcars %>% 
-  filter(cyl > 1) %>% 
-  ggplot(aes(x = mpg, y = disp)) +
-  geom_point() +
-  theme_bw()
-```
 
 ```{r width=5, height=12, warning=FALSE, message=FALSE}
 library(ggrepel)
@@ -98,37 +70,6 @@ d2020 <- d_map %>%
   arrange(desc(demanda)) %>% 
   filter(demanda > 3000) %>% 
   mutate(tipo = if_else(demanda > 5000, '#FF000095', '#FF999995'))
-
-
-p <- d_map %>% 
-  mutate(demanda = cut(
-    x = demanda, 
-    breaks = c(0, 3000, 5000, 8000),
-    include.lowest = TRUE, dig.lab = 10
-  )) %>% {
-    ggplot(., aes(x = long, y = lat)) +
-      geom_map(aes(map_id = id, fill = demanda), 
-               map = ., colour = 'black', size = 0.1) +
-      coord_equal() +
-      scale_fill_brewer(palette = 'PuRd') +
-      geom_label_repel(aes(label = sprintf('%s\n(%s)', id, demanda)), 
-                       data = d2020, 
-                       box.padding = unit(.5, "lines"),
-                       fill = d2020$tipo,
-                       force = 10,
-                       size = 2.5,
-                       fontface = "bold") +
-      geom_point(data = d2020, colour = 'black') +
-      scale_x_continuous(limits = with(d_map, range(long) + c(-2e4, +2e4))) +
-      theme_void() +
-      labs(fill = '') +
-      theme(legend.position = c(0.69, 0.25)) +
-      ggtitle('Demanda não atendida - final de 2016',
-              'Fonte: Defensoria pública. Dados obtidos em 22/04/2017.')
-  }
-ggsave('mapa.png', p, width = 8, height = 5)
-p
-
 
 p <- d_map %>% 
   mutate(atendimento = matricula / pop) %>% 
@@ -190,7 +131,7 @@ p <- d_map %>%
       geom_map(aes(map_id = id, fill = atendimento), 
                map = ., colour = 'black', size = 0.1) +
       coord_equal() +
-      scale_fill_brewer(palette = 'Oranges') +
+      scale_fill_brewer(palette = 'PuRd') +
       geom_label_repel(aes(label = sprintf('%s\n(%s)', id, scales::percent(atendimento))), 
                        data = d2020, 
                        box.padding = unit(.5, "lines"),
